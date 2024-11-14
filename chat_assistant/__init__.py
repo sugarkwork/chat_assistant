@@ -1,7 +1,6 @@
 import os
 import asyncio
 import json
-from litellm import acompletion
 from json_repair import repair_json
 from typing import List, Dict, Optional, Any
 from logging import getLogger
@@ -174,6 +173,8 @@ class ChatAssistant:
         raise RuntimeError("すべてのモデルで失敗しました")
 
     async def _call_model(self, model: str, messages: List[Dict]):
+        from litellm import acompletion
+
         """モデル呼び出しの共通処理"""
         if "gemini" in model:
             return await acompletion(
@@ -194,6 +195,13 @@ class ChatAssistant:
         if json_mode and isinstance(result, str):
             return json.loads(repair_json(result))
         return result
+    
+    async def __aenter__(self):
+        return self
+    
+    async def __aexit__(self, exc_type, exc_value, traceback):
+        if self.memory:
+            await self.memory.close()
 
 
 async def main():
@@ -211,13 +219,10 @@ async def main():
     logger = logging.getLogger("chat_assistant")
     logger.setLevel(logging.DEBUG)
 
-    chat_assistant = ChatAssistant()
-    chat_assistant.model_manager.change_model("xai")
-    result = await chat_assistant.chat(message="Who are you???", use_cache=False)
-
-    logger.info(result)
-
-    await asyncio.sleep(1)
+    async with ChatAssistant() as chat_assistant:
+        chat_assistant.model_manager.change_model("xai")
+        result = await chat_assistant.chat(message="Who are you???", use_cache=True)
+        logger.info(result)
 
 
 if __name__ == "__main__":
