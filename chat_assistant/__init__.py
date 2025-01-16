@@ -6,6 +6,9 @@ from typing import List, Dict, Optional, Any
 from logging import getLogger
 from pmem.async_pmem import PersistentMemory
 
+import warnings
+warnings.filterwarnings("ignore", message=".*Valid config keys have changed in V2.*")
+
 
 PKG_NAME = "chat_assistant"
 
@@ -26,9 +29,11 @@ class ModelManager:
             "anthropic/claude-3-5-haiku-20241022",
             "cohere/command-r-08-2024",
 
-            "xai/grok-beta",
+            "xai/grok-2-latest",
             "huggingface/Qwen/Qwen2.5-72B-Instruct",
             "openai/local-lmstudio",
+
+            "deepseek/deepseek-chat"
         ]
         if auto_remove_models:
             self._remove_disable_models()
@@ -57,7 +62,7 @@ class ModelManager:
         if localllm not in self.models:
             self.models.append(localllm)
         
-        self.logger.info(f"Models: {self.models}")
+        self.logger.debug(f"Models: {self.models}")
 
     def _load_models(self) -> List[str]:
         """モデルリストの読み込み"""
@@ -90,9 +95,9 @@ class ModelManager:
         current_model = self.get_current_model()
         
         if old_model != current_model:
-            self.logger.info(f"Change Model: {old_model} -> {current_model}")
+            self.logger.debug(f"Change Model: {old_model} -> {current_model}")
         else:
-            self.logger.info(f"Current Model: {current_model}")
+            self.logger.debug(f"Current Model: {current_model}")
         
         return current_model
 
@@ -100,11 +105,11 @@ class ModelManager:
         """次のモデルに切り替え"""
         self.current_model_index = (self.current_model_index + 1) % len(self.models)
 
-        self.logger.info(f"Next Model: {self.get_current_model()}")
+        self.logger.debug(f"Next Model: {self.get_current_model()}")
 
 
 class ChatAssistant:
-    def __init__(self, model_manager: ModelManager=None, memory: Optional[PersistentMemory]=None):
+    def __init__(self, model_manager: ModelManager=None, memory: Optional[PersistentMemory]=None, **kwargs):
         """チャットアシスタントクラス"""
         self.logger = getLogger(f"{PKG_NAME}.{self.__class__}")
 
@@ -123,27 +128,57 @@ class ChatAssistant:
                 "HARM_CATEGORY_DANGEROUS_CONTENT"
             ]
         ]
+        self.kwargs = kwargs or {}
 
     async def chat(
         self, 
         system: str = "", 
         message: str = "", 
         use_cache: bool = True, 
-        json_mode: bool = False
+        json_mode: bool = False,
+        chat_log: Optional[list] = None
     ) -> Any:
         """チャット機能"""
         memory_key = f"chat_memory_{system}_{message}"
+        
+        self.logger.info(f"Chat Send: {message}")
         
         # メモリからキャッシュを確認
         if self.memory and use_cache:
             result = await self.memory.load(memory_key)
             if result:
-                self.logger.info(f"Chat Cache: {result[:50]}...")
-                self.logger.debug(f"Chat Cache: {result}")
+                self.logger.info(f"Chat Result(Cache): {result[:50]}...")
+                self.logger.debug(f"Chat Result(Cache): {result}")
                 return self._parse_result(result, json_mode)
 
         messages = [
             {"content": system, "role": "system"},
+        ]
+        if chat_log:
+            if isinstance(chat_log, list):
+                if isinstance(chat_log[0], dict):
+                    messages += chat_log
+                    self.logger.debug(f"Chat Log(dict list): {chat_log}")
+                elif isinstance(chat_log[0], str):
+                    new_chat_log = []
+                    user_switch = True
+                    for log in chat_log:
+                        new_chat_log.append({"content": log, "role": "user" if user_switch else "assistant"})
+                        user_switch = not user_switch
+                    messages += new_chat_log
+                    self.logger.debug(f"Chat Log(string list): {chat_log}")
+                else:
+                    self.logger.error(f"Chat Log(unknown): {chat_log}")
+                    raise ValueError("chat_log must be a list of dict or a list of string")
+            elif isinstance(chat_log, str):
+                messages += [
+                    {"content": chat_log, "role": "user"}
+                ]
+                self.logger.debug(f"Chat Log(string): {chat_log}")
+            else:
+                self.logger.error(f"Chat Log(unknown): {chat_log}")
+                raise ValueError("chat_log must be a list or a string")
+        messages += [
             {"content": message, "role": "user"}
         ]
 
@@ -167,6 +202,7 @@ class ChatAssistant:
             except Exception as e:
                 self.logger.error(f"Chat Error {current_model}: {e}")
                 self.model_manager.next_model()
+                self.logger.error(f"Change Model: {self.model_manager.get_current_model()}")
                 await asyncio.sleep(3)
 
         self.logger.error("Chat Failed")
@@ -180,15 +216,17 @@ class ChatAssistant:
             return await acompletion(
                 model=model, 
                 messages=messages, 
-                safety_settings=self.safety_settings)
+                safety_settings=self.safety_settings,
+                **self.kwargs)
         elif "local" in model:
             return await acompletion(
                 model=model,
                 api_key="sk-1234",
                 api_base="http://localhost:1234/v1",
-                messages=messages
+                messages=messages,
+                **self.kwargs
             )
-        return await acompletion(model=model, messages=messages)
+        return await acompletion(model=model, messages=messages, **self.kwargs)
 
     def _parse_result(self, result: Any, json_mode: bool) -> Any:
         """結果のパース"""
@@ -211,17 +249,15 @@ async def main():
     logging.basicConfig(
         level=logging.ERROR,
         format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-        handlers=[
-            logging.StreamHandler()  # コンソールハンドラーを追加
-        ]
+        handlers=[logging.StreamHandler()]
     )
     
     logger = logging.getLogger("chat_assistant")
-    logger.setLevel(logging.DEBUG)
+    logger.setLevel(logging.INFO)
 
-    async with ChatAssistant() as chat_assistant:
-        chat_assistant.model_manager.change_model("xai")
-        result = await chat_assistant.chat(message="Who are you???", use_cache=True)
+    async with ChatAssistant(temperature=1.5) as chat_assistant:
+        chat_assistant.model_manager.change_model("deepseek")
+        result = await chat_assistant.chat(message="Who are you?", use_cache=True)
         logger.info(result)
 
 
