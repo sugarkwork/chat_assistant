@@ -139,7 +139,7 @@ class ChatAssistant:
         chat_log: Optional[list] = None
     ) -> Any:
         """チャット機能"""
-        memory_key = f"chat_memory_{system}_{message}"
+        memory_key = f"chat_memory_{system}_{message}_{chat_log}"
         
         self.logger.info(f"Chat Send: {message}")
         
