@@ -35,10 +35,10 @@ class ModelManager:
 
             "deepseek/deepseek-chat"
         ]
+        self.local_fallback = local_fallback
         if auto_remove_models:
             self._remove_disable_models()
         self.current_model_index = 0
-        self.local_fallback = local_fallback
     
     def _remove_disable_models(self):
         """無効なAPIキーを持つモデルを削除"""
