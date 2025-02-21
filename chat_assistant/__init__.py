@@ -14,7 +14,7 @@ PKG_NAME = "chat_assistant"
 
 
 class ModelManager:
-    def __init__(self, models_file: str = "models.json", models: Optional[List[str]] = None, auto_remove_models: bool = True):
+    def __init__(self, models_file: str = "models.json", models: Optional[List[str]] = None, auto_remove_models: bool = True, local_fallback: bool = True):
         """モデル管理クラス"""
         self.logger = getLogger(f"{PKG_NAME}.{self.__class__}")
         self.models_file = models_file
@@ -38,6 +38,7 @@ class ModelManager:
         if auto_remove_models:
             self._remove_disable_models()
         self.current_model_index = 0
+        self.local_fallback = local_fallback
     
     def _remove_disable_models(self):
         """無効なAPIキーを持つモデルを削除"""
@@ -57,10 +58,11 @@ class ModelManager:
             if not os.environ.get(key):
                 self.models = [model for model in self.models if product_name not in model]
         
-        # ローカルモデルの追加
-        localllm = "openai/local-lmstudio"
-        if localllm not in self.models:
-            self.models.append(localllm)
+        if self.local_fallback:
+            # ローカルモデルの追加
+            localllm = "openai/local-lmstudio"
+            if localllm not in self.models:
+                self.models.append(localllm)
         
         self.logger.debug(f"Models: {self.models}")
 
