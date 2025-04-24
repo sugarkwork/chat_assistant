@@ -4,7 +4,7 @@ import json
 from json_repair import repair_json
 from typing import List, Dict, Optional, Any
 from logging import getLogger
-from pmem.async_pmem import PersistentMemory
+from skpmem.async_pmem import PersistentMemory
 
 import warnings
 warnings.filterwarnings("ignore", message=".*Valid config keys have changed in V2.*")

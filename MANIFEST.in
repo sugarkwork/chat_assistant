@@ -1,0 +1,4 @@
+include requirements.txt
+exclude .env
+exclude chat_log.db
+prune venv

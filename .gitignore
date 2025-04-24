@@ -1,3 +1,6 @@
 /chat_log.db
 /venv
 .env
+build/
+dist/
+chat_assistant.egg-info
