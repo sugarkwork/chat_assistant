@@ -115,8 +115,10 @@ class ChatAssistant:
         """チャットアシスタントクラス"""
         self.logger = getLogger(f"{PKG_NAME}.{self.__class__}")
 
+        self._local_memory = False
         self.memory = memory
         if not memory:
+            self._local_memory = True
             self.memory = PersistentMemory("chat_log.db")
         if not model_manager:
             model_manager = ModelManager()
@@ -143,7 +145,8 @@ class ChatAssistant:
         """チャット機能"""
         memory_key = f"chat_memory_{system}_{message}_{chat_log}"
         
-        self.logger.info(f"Chat Send: {message}")
+        self.logger.info(f"Chat Send: {message[:50]}")
+        self.logger.debug(f"Chat Send: {message}")
         
         # メモリからキャッシュを確認
         if self.memory and use_cache:
@@ -214,13 +217,21 @@ class ChatAssistant:
         from litellm import acompletion
 
         """モデル呼び出しの共通処理"""
-        if "gemini" in model:
+        if model.startswith("gemini"):
             return await acompletion(
                 model=model, 
                 messages=messages, 
                 safety_settings=self.safety_settings,
                 **self.kwargs)
-        elif "local" in model:
+        elif model.startswith("lambda"):
+            return await acompletion(
+                model="openai/" + model.split("/")[1],
+                api_key=os.environ.get("LAMBDA_API_KEY"),
+                api_base="https://api.lambda.ai/v1",
+                messages=messages,
+                **self.kwargs
+            )
+        elif model.startswith("local"):
             return await acompletion(
                 model=model,
                 api_key="sk-1234",
@@ -240,7 +251,7 @@ class ChatAssistant:
         return self
     
     async def __aexit__(self, exc_type, exc_value, traceback):
-        if self.memory:
+        if self.memory and self._local_memory:
             await self.memory.close()
 
 
@@ -257,8 +268,9 @@ async def main():
     logger = logging.getLogger("chat_assistant")
     logger.setLevel(logging.INFO)
 
-    async with ChatAssistant(temperature=1.5) as chat_assistant:
-        chat_assistant.model_manager.change_model("deepseek")
+    model_manager = ModelManager(models=["lambda/deepseek-r1-671b"])
+
+    async with ChatAssistant(temperature=1.5, model_manager=model_manager) as chat_assistant:
         result = await chat_assistant.chat(message="Who are you?", use_cache=True)
         logger.info(result)
 
