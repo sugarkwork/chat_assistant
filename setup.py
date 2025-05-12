@@ -9,7 +9,7 @@ with codecs.open('README.md', 'r', encoding='utf-8') as f:
 
 setuptools.setup(
     name="chat-assistant",
-    version="0.1.5",
+    version="0.1.6",
     install_requires=requirements,
     packages=setuptools.find_packages(),
     description="Chat Assistant",
