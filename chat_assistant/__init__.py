@@ -243,6 +243,9 @@ class ChatAssistant:
 
     def _parse_result(self, result: Any, json_mode: bool) -> Any:
         """結果のパース"""
+        if isinstance(result, str):
+            if '</think>' in result:
+                result = result.split('</think>')[1].strip()
         if json_mode and isinstance(result, str):
             return json.loads(repair_json(result))
         return result
