@@ -1,4 +1,6 @@
 include requirements.txt
+include README.md
+include LICENSE
 exclude .env
 exclude chat_log.db
 prune venv
