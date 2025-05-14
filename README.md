@@ -45,7 +45,8 @@ from chat_assistant import ChatAssistant, ModelManager
 model_manager = ModelManager(models=["openai/gpt-4.1", 
                                      "openai/gpt-4o", 
                                      "anthropic/claude-3-7-sonnet-latest",
-                                     "anthropic/claude-3-5-sonnet-latest"])
+                                     "anthropic/claude-3-5-sonnet-latest",
+                                     "lambda/deepseek-r1-671b"])
 assistant = ChatAssistant(model_manager=model_manager, temperature=1.0)
 
 model_manager.change_model("claude-3-7")
