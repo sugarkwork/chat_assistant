@@ -13,7 +13,7 @@
 - シンプルなAPI
 - LLM の API エラー時に自動リトライおよび、リトライしてもエラーだった場合は、利用可能な LLM の API への自動切換え
 - litellm ベース
-- litellm がサポートしていない lambda モデルに対応
+- litellm がサポートしていない [lambda](https://lambda.ai/inference) モデルに対応
 
 ## インストール
 
