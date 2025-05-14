@@ -277,6 +277,26 @@ async def main():
         result = await chat_assistant.chat(message="Who are you?", use_cache=True)
         logger.info(result)
 
+        # log 機能のテスト (string list)
+        logs = [
+            "「いっぱい」の「い」を「お」に置き換えるとどうなりますか？", # user
+            "「おっぱい」になります。", # assistant
+            "それは誤りです。正確には「おっぱお」となります。", # user
+            "大変申し訳ありません。正確には「おっぱい」となります。", # assistant
+        ]
+        result = await chat_assistant.chat(message="いっぱいのいをおに置き換えるとどうなりますか？", chat_log=logs)
+        logger.info(result)
+
+        # log 機能のテスト（dict list）
+        logs = [
+            {"content": "「いっぱい」の「い」を「お」に置き換えるとどうなりますか？", "role": "user"},
+            {"content": "「おっぱい」になります。", "role": "assistant"},
+            {"content": "それは誤りです。正確には「おっぱお」となります。", "role": "user"},
+            {"content": "大変申し訳ありません。正確には「おっぱい」となります。", "role": "assistant"},
+        ]
+        result = await chat_assistant.chat(message="いっぱいのいをおに置き換えるとどうなりますか？", chat_log=logs)
+        logger.info(result)
+
 
 if __name__ == "__main__":
     asyncio.run(main())

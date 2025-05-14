@@ -54,6 +54,38 @@ model_manager.change_model("claude-3-7")
 - models に複数のモデルを定義する事で、API障害発生時に自動的に切り替えて、障害に備えます。
 - model_manager.change_model() で、任意のモデルに切り替えます。
 
+### 会話履歴（chat_log）を渡す
+
+#### 文字列リスト形式
+
+```python
+logs = [
+    "「いっぱい」の「い」を「お」に置き換えるとどうなりますか？",  # user
+    "「おっぱい」になります。",  # assistant
+    "それは誤りです。正確には「おっぱお」となります。",  # user
+    "大変申し訳ありません。正確には「おっぱい」となります。",  # assistant
+]
+result = await assistant.chat(message="いっぱいのいをおに置き換えるとどうなりますか？", chat_log=logs)
+print(result)
+```
+
+- 文字列のリストを chat_log に渡すと、その文字列をユーザーとアシスタントの間で交互の会話ログとして記録します。
+- ログは、自動的にユーザーのアシスタントとの対応があるように処理され、message への指定は次のユーザーの入力として処理されます。
+
+#### 辞書リスト形式
+
+```python
+logs = [
+    {"content": "「いっぱい」の「い」を「お」に置き換えるとどうなりますか？", "role": "user"},
+    {"content": "「おっぱい」になります。", "role": "assistant"},
+    {"content": "それは誤りです。正確には「おっぱお」となります。", "role": "user"},
+    {"content": "大変申し訳ありません。正確には「おっぱい」となります。", "role": "assistant"},
+]
+result = await assistant.chat(message="いっぱいのいをおに置き換えるとどうなりますか？", chat_log=logs)
+print(result)
+```
+
+- chat_log に辞書リストを渡すと、その辞書リストをユーザーとアシスタントの間でログとして参照します。
 
 ### main関数のサンプル
 
