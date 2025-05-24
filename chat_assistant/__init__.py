@@ -134,28 +134,8 @@ class ChatAssistant:
         ]
         self.kwargs = kwargs or {}
 
-    async def chat(
-        self, 
-        system: str = "", 
-        message: str = "", 
-        use_cache: bool = True, 
-        json_mode: bool = False,
-        chat_log: Optional[list] = None
-    ) -> Any:
-        """チャット機能"""
-        memory_key = f"chat_memory_{system}_{message}_{chat_log}"
-        
-        self.logger.info(f"Chat Send: {message[:50]}")
-        self.logger.debug(f"Chat Send: {message}")
-        
-        # メモリからキャッシュを確認
-        if self.memory and use_cache:
-            result = await self.memory.load(memory_key)
-            if result:
-                self.logger.info(f"Chat Result(Cache): {result[:50]}...")
-                self.logger.debug(f"Chat Result(Cache): {result}")
-                return self._parse_result(result, json_mode)
-
+    def _build_messages(self, system: str, message: str, chat_log: Optional[list] = None) -> List[Dict]:
+        """メッセージリストを構築する共通処理"""
         messages = [
             {"content": system, "role": "system"},
         ]
@@ -186,6 +166,31 @@ class ChatAssistant:
         messages += [
             {"content": message, "role": "user"}
         ]
+        return messages
+
+    async def chat(
+        self,
+        system: str = "",
+        message: str = "",
+        use_cache: bool = True,
+        json_mode: bool = False,
+        chat_log: Optional[list] = None
+    ) -> Any:
+        """チャット機能（非同期版）"""
+        memory_key = f"chat_memory_{system}_{message}_{chat_log}"
+        
+        self.logger.info(f"Chat Send: {message[:50]}")
+        self.logger.debug(f"Chat Send: {message}")
+        
+        # メモリからキャッシュを確認
+        if self.memory and use_cache:
+            result = await self.memory.load(memory_key)
+            if result:
+                self.logger.info(f"Chat Result(Cache): {result[:50]}...")
+                self.logger.debug(f"Chat Result(Cache): {result}")
+                return self._parse_result(result, json_mode)
+
+        messages = self._build_messages(system, message, chat_log)
 
         max_attempts = len(self.model_manager.models)
         for _ in range(max_attempts):
@@ -209,6 +214,58 @@ class ChatAssistant:
                 self.model_manager.next_model()
                 self.logger.error(f"Change Model: {self.model_manager.get_current_model()}")
                 await asyncio.sleep(3)
+
+        self.logger.error("Chat Failed")
+        raise RuntimeError("すべてのモデルで失敗しました")
+
+    def chat_sync(
+        self,
+        system: str = "",
+        message: str = "",
+        use_cache: bool = True,
+        json_mode: bool = False,
+        chat_log: Optional[list] = None
+    ) -> Any:
+        """チャット機能（同期版）"""
+        import time
+        
+        memory_key = f"chat_memory_{system}_{message}_{chat_log}"
+        
+        self.logger.info(f"Chat Send: {message[:50]}")
+        self.logger.debug(f"Chat Send: {message}")
+        
+        # メモリからキャッシュを確認
+        if self.memory and use_cache:
+            result = self.memory.load_sync(memory_key)
+            if result:
+                self.logger.info(f"Chat Result(Cache): {result[:50]}...")
+                self.logger.debug(f"Chat Result(Cache): {result}")
+                return self._parse_result(result, json_mode)
+
+        messages = self._build_messages(system, message, chat_log)
+
+        max_attempts = len(self.model_manager.models)
+        for _ in range(max_attempts):
+            current_model = self.model_manager.get_current_model()
+            
+            try:
+                response = self._call_model_sync(current_model, messages)
+                result = response.choices[0].message.content
+                
+                # メモリに保存
+                if self.memory:
+                    self.memory.save_sync(memory_key, result)
+
+                self.logger.info(f"Chat Result: {result[:50]}")
+                self.logger.debug(f"Chat Result: {result}")
+                
+                return self._parse_result(result, json_mode)
+            
+            except Exception as e:
+                self.logger.error(f"Chat Error {current_model}: {e}")
+                self.model_manager.next_model()
+                self.logger.error(f"Change Model: {self.model_manager.get_current_model()}")
+                time.sleep(3)  # 同期版では time.sleep を使用
 
         self.logger.error("Chat Failed")
         raise RuntimeError("すべてのモデルで失敗しました")
@@ -241,6 +298,34 @@ class ChatAssistant:
             )
         return await acompletion(model=model, messages=messages, **self.kwargs)
 
+    def _call_model_sync(self, model: str, messages: List[Dict]):
+        from litellm import completion
+
+        """モデル呼び出しの共通処理（同期版）"""
+        if model.startswith("gemini"):
+            return completion(
+                model=model,
+                messages=messages,
+                safety_settings=self.safety_settings,
+                **self.kwargs)
+        elif model.startswith("lambda"):
+            return completion(
+                model="openai/" + model.split("/")[1],
+                api_key=os.environ.get("LAMBDA_API_KEY"),
+                api_base="https://api.lambda.ai/v1",
+                messages=messages,
+                **self.kwargs
+            )
+        elif model.startswith("local"):
+            return completion(
+                model=model,
+                api_key="sk-1234",
+                api_base="http://localhost:1234/v1",
+                messages=messages,
+                **self.kwargs
+            )
+        return completion(model=model, messages=messages, **self.kwargs)
+
     def _parse_result(self, result: Any, json_mode: bool) -> Any:
         """結果のパース"""
         if isinstance(result, str):
@@ -256,10 +341,59 @@ class ChatAssistant:
     async def __aexit__(self, exc_type, exc_value, traceback):
         if self.memory and self._local_memory:
             await self.memory.close()
+    
+    def __enter__(self):
+        """同期版コンテキストマネージャー"""
+        return self
+    
+    def __exit__(self, exc_type, exc_value, traceback):
+        """同期版コンテキストマネージャー"""
+        if self.memory and self._local_memory:
+            self.memory.close_sync()
+
+
+def main_sync():
+    """同期版のテスト用メイン関数"""
+    import logging
+
+    logging.basicConfig(
+        level=logging.ERROR,
+        format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+        handlers=[logging.StreamHandler()]
+    )
+    
+    logger = logging.getLogger("chat_assistant")
+    logger.setLevel(logging.INFO)
+
+    model_manager = ModelManager(models=["lambda/deepseek-r1-671b"])
+
+    with ChatAssistant(temperature=1.5, model_manager=model_manager) as chat_assistant:
+        result = chat_assistant.chat_sync(message="Who are you?", use_cache=True)
+        logger.info(result)
+
+        # log 機能のテスト (string list)
+        logs = [
+            "「いっぱい」の「い」を「お」に置き換えるとどうなりますか？", # user
+            "「おっぱい」になります。", # assistant
+            "それは誤りです。正確には「おっぱお」となります。", # user
+            "大変申し訳ありません。正確には「おっぱい」となります。", # assistant
+        ]
+        result = chat_assistant.chat_sync(message="いっぱいのいをおに置き換えるとどうなりますか？", chat_log=logs)
+        logger.info(result)
+
+        # log 機能のテスト（dict list）
+        logs = [
+            {"content": "「いっぱい」の「い」を「お」に置き換えるとどうなりますか？", "role": "user"},
+            {"content": "「おっぱい」になります。", "role": "assistant"},
+            {"content": "それは誤りです。正確には「おっぱお」となります。", "role": "user"},
+            {"content": "大変申し訳ありません。正確には「おっぱい」となります。", "role": "assistant"},
+        ]
+        result = chat_assistant.chat_sync(message="いっぱいのいをおに置き換えるとどうなりますか？", chat_log=logs)
+        logger.info(result)
 
 
 async def main():
-    # log output console
+    """非同期版のテスト用メイン関数"""
     import logging
 
     logging.basicConfig(
@@ -299,4 +433,9 @@ async def main():
 
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    # 同期版のテスト
+    main_sync()
+
+    # 非同期版のテスト
+    #asyncio.run(main())
+    

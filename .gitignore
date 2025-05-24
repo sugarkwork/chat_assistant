@@ -4,3 +4,4 @@
 build/
 dist/
 chat_assistant.egg-info
+google_test.py
