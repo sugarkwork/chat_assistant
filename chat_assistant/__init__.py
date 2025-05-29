@@ -136,9 +136,11 @@ class ChatAssistant:
 
     def _build_messages(self, system: str, message: str, chat_log: Optional[list] = None) -> List[Dict]:
         """メッセージリストを構築する共通処理"""
-        messages = [
-            {"content": system, "role": "system"},
-        ]
+        messages = []
+        if system:
+            messages = [
+                {"content": system, "role": "system"},
+            ]
         if chat_log:
             if isinstance(chat_log, list):
                 if isinstance(chat_log[0], dict):
