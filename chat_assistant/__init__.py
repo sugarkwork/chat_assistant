@@ -4,7 +4,7 @@ import json
 from json_repair import repair_json
 from typing import List, Dict, Optional, Any
 from logging import getLogger
-from skpmem.async_pmem import PersistentMemory
+from skpmem import PersistentMemory
 
 import warnings
 warnings.filterwarnings("ignore", message=".*Valid config keys have changed in V2.*")
@@ -367,7 +367,7 @@ def main_sync():
     logger = logging.getLogger("chat_assistant")
     logger.setLevel(logging.INFO)
 
-    model_manager = ModelManager(models=["lambda/deepseek-r1-671b"])
+    model_manager = ModelManager(models=["gemini/gemini-2.0-flash"])
 
     with ChatAssistant(temperature=1.5, model_manager=model_manager) as chat_assistant:
         result = chat_assistant.chat_sync(message="Who are you?", use_cache=True)
@@ -407,7 +407,7 @@ async def main():
     logger = logging.getLogger("chat_assistant")
     logger.setLevel(logging.INFO)
 
-    model_manager = ModelManager(models=["lambda/deepseek-r1-671b"])
+    model_manager = ModelManager(models=["gemini/gemini-2.0-flash"])
 
     async with ChatAssistant(temperature=1.5, model_manager=model_manager) as chat_assistant:
         result = await chat_assistant.chat(message="Who are you?", use_cache=True)
