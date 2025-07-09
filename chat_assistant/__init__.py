@@ -468,12 +468,25 @@ class ChatAssistant:
         self,
         system: str = "",
         message: str = "",
-        chat_log: Optional[Union[List[Dict], List[str], str]] = None
+        chat_log: Optional[Union[List[Dict], List[str], str]] = None,
+        use_cache: bool = True,
+        json_mode: bool = False
     ):
         """チャット機能（非同期ストリーミング版）"""
         self.logger.info(f"Chat Stream Send: {message[:50]}")
         self.logger.debug(f"Chat Stream Send: {message}")
+
+        memory_key = self._generate_memory_key(system, message, chat_log)
         
+        # メモリからキャッシュを確認
+        if self.memory and use_cache:
+            result = await self.memory.load(memory_key)
+            if result:
+                self.logger.info(f"Chat Result(Cache): {result[:50]}...")
+                self.logger.debug(f"Chat Result(Cache): {result}")
+                yield self._parse_result(result, json_mode)
+                return
+
         messages = self._build_messages(system, message, chat_log)
         
         max_attempts = len(self.model_manager.models)
@@ -496,6 +509,9 @@ class ChatAssistant:
                 
                 self.logger.info(f"Chat Stream Result: {full_response[:50]}")
                 self.logger.debug(f"Chat Stream Result: {full_response}")
+
+                if self.memory:
+                    await self.memory.save(memory_key, full_response)
                 
                 # ストリーミング成功時は終了
                 return
@@ -513,7 +529,9 @@ class ChatAssistant:
         self,
         system: str = "",
         message: str = "",
-        chat_log: Optional[Union[List[Dict], List[str], str]] = None
+        chat_log: Optional[Union[List[Dict], List[str], str]] = None,
+        use_cache: bool = True,
+        json_mode: bool = False
     ):
         """チャット機能（同期ストリーミング版）"""
         import time
@@ -521,6 +539,16 @@ class ChatAssistant:
         self.logger.info(f"Chat Stream Send: {message[:50]}")
         self.logger.debug(f"Chat Stream Send: {message}")
         
+        memory_key = self._generate_memory_key(system, message, chat_log)
+
+        if self.memory and use_cache:
+            result = self.memory.load_sync(memory_key)
+            if result:
+                self.logger.info(f"Chat Result(Cache): {result[:50]}...")
+                self.logger.debug(f"Chat Result(Cache): {result}")
+                yield self._parse_result(result, json_mode)
+                return
+
         messages = self._build_messages(system, message, chat_log)
         
         max_attempts = len(self.model_manager.models)
@@ -543,6 +571,9 @@ class ChatAssistant:
                 
                 self.logger.info(f"Chat Stream Result: {full_response[:50]}")
                 self.logger.debug(f"Chat Stream Result: {full_response}")
+
+                if self.memory:
+                    self.memory.save_sync(memory_key, full_response)
                 
                 # ストリーミング成功時は終了
                 return
